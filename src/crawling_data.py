@@ -52,7 +52,7 @@ DANH_MUC_HOA = {
     "Hoa cúc": 262
 }
 
-FILE_KET_QUA = "database_hoa.json"
+FILE_KET_QUA = "database_hoa_v2.json"
 URL_GOC = "https://hoayeuthuong.com/hoa-tuoi/hoa-hong.aspx" # Dùng trang nào làm gốc cũng được
 
 print("🚀 KHỞI ĐỘNG HỆ THỐNG THU THẬP DỮ LIỆU...\n")
@@ -135,13 +135,41 @@ tong_so_moi = len(links_can_cao)
 print(f"⏳ Bắt đầu trích xuất {tong_so_moi} sản phẩm còn lại...")
 
 for idx, link in enumerate(links_can_cao, start=len(du_lieu_cuoi_cung) + 1):
+    seen_ids = set([item.get("id") for item in du_lieu_cuoi_cung])
     try:
         res_detail = SESSION.get(link, headers={'User-Agent': HEADERS['User-Agent']})
         soup = BeautifulSoup(res_detail.text, 'html.parser')
 
         # 1. Tên hoa
-        ten_hoa_tag = soup.find('div', class_='r_item').find('h2')
-        ten_hoa = ten_hoa_tag.text.strip() if ten_hoa_tag else "Không tên"
+        ten_hoa_tag = soup.find('div', class_='r_item')
+        if ten_hoa_tag and ten_hoa_tag.find('h2'):
+            ten_hoa_full = ten_hoa_tag.find('h2').get_text(strip=True)
+        else:
+            ten_hoa_full = "Không tên"
+        print(ten_hoa_full)
+        parts = [p.strip() for p in ten_hoa_full.split("-")]
+        if len(parts) >= 3:
+            # Bỏ khúc đầu (danh mục) và khúc cuối (ID), nối các khúc giữa lại
+            ten_hoa = " - ".join(parts[1:-1]) 
+        else:
+            ten_hoa= ten_hoa_full
+
+        match_id = re.search(r'- (\d+)\s*$', ten_hoa_full)
+        if match_id:
+            flower_id = match_id.group(1)
+        else:
+            # Dự phòng 1: Thử moi ID từ trong link URL (VD: /14593_my-girl)
+            url_match = re.search(r'/(\d+)_', link)
+            if url_match:
+                flower_id = url_match.group(1)
+            else:
+                # Dự phòng 2: Băm (hash) cái URL ra một mã số duy nhất và cố định
+                # Biến URL thành 1 con số tuyệt đối không trùng lặp
+                flower_id = str(abs(hash(link)))[:8]
+        if flower_id in seen_ids:
+            print(f"   ⚠️ Bỏ qua link vì trùng ID {flower_id}.")
+            continue
+        seen_ids.add(flower_id)
 
         # 2. Giá
         gia_cu_tag = soup.find('span', class_='old-price')
@@ -163,7 +191,7 @@ for idx, link in enumerate(links_can_cao, start=len(du_lieu_cuoi_cung) + 1):
 
         # Đóng gói dữ liệu
         item_data = {
-            "id": f"SP_{idx}",
+            "id": flower_id,
             "url": link,
             "ten_hoa": ten_hoa,
             "gia_cu": gia_cu,
@@ -181,11 +209,11 @@ for idx, link in enumerate(links_can_cao, start=len(du_lieu_cuoi_cung) + 1):
         if idx % 10 == 0 or idx == len(danh_sach_links):
             with open(FILE_KET_QUA, 'w', encoding='utf-8') as f:
                 json.dump(du_lieu_cuoi_cung, f, ensure_ascii=False, indent=4)
-            print(f"   💾 ---> Đã lưu Checkpoint thành công!")
+            print(f"---> Đã lưu Checkpoint thành công!")
 
     except Exception as e:
         print(f"   ❌ Lỗi ở sản phẩm {idx}: {e}")
 
     time.sleep(1)
 
-print("\n🎉 XUẤT SẮC! Dữ liệu đã được lưu gọn gàng vào database_hoa.json")
+print(f"\nDữ liệu đã được lưu vào {FILE_KET_QUA}")

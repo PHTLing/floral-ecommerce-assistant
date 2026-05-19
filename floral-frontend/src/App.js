@@ -5,18 +5,29 @@ import { Send, Phone } from "lucide-react";
 import { motion } from "framer-motion";
 
 const QUICK_REPLIES = [
-  "🎂 Sinh nhật",
-  "💕 Tình yêu",
-  "🎓 Chúc mừng",
-  "💰 Dưới 500k",
+  "🎂 Mẫu hoa tặng sinh nhật",
+  "💕 Mẫu hoa bày tỏ tình yêu",
+  "🎓 Mẫu hoa chúc mừng"
 ];
 
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  const [userHasResponded, setUserHasResponded] = useState(false);
   const chatRef = useRef(null);
 
   const session_id = "user_123";
+
+  // Khởi tạo greeting message lúc app start
+  useEffect(() => {
+    const greetingMsg = {
+      type: "bot",
+      text: "Xin chào! 👋 Tôi là FloraConsult - chatbot tư vấn hoa của bạn.\nBạn cần mình giúp gì hôm nay?",
+      isGreeting: true,
+      data: []
+    };
+    setMessages([greetingMsg]);
+  }, []);
 
   // Auto scroll
   useEffect(() => {
@@ -25,6 +36,11 @@ export default function App() {
 
   const sendMessage = async (text) => {
     if (!text.trim()) return;
+
+    // Đánh dấu user đã phản hồi lần đầu
+    if (!userHasResponded) {
+      setUserHasResponded(true);
+    }
 
     const userMsg = { type: "user", text };
     setMessages((prev) => [...prev, userMsg]);
@@ -97,18 +113,20 @@ export default function App() {
                   <ReactMarkdown>{msg.text}</ReactMarkdown>
                 </div>
 
-                {/* Quick replies */}
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {QUICK_REPLIES.map((q, i) => (
-                    <button
-                      key={i}
-                      onClick={() => sendMessage(q)}
-                      className="bg-white border px-3 py-1 rounded-full text-sm hover:bg-gray-100"
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
+                {/* Quick replies - Chỉ hiển thị nếu user chưa phản hồi và đây là message cuối cùng */}
+                {!userHasResponded && idx === messages.length - 1 && (
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {QUICK_REPLIES.map((q, i) => (
+                      <button
+                        key={i}
+                        onClick={() => sendMessage(q)}
+                        className="bg-white border px-3 py-1 rounded-full text-sm hover:bg-gray-100"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {/* Product carousel */}
                 {msg.data && msg.data.length > 0 && (
@@ -118,11 +136,18 @@ export default function App() {
                         key={i}
                         className="min-w-[200px] bg-white rounded-xl shadow p-3"
                       >
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-full h-32 object-cover rounded-lg"
-                        />
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="w-full h-32 object-cover rounded-lg"
+                            onError={(e) => e.target.src = 'https://via.placeholder.com/200x150?text=Hoa'}
+                          />
+                          ) : (
+                          <div className="w-full h-32 bg-gray-200 rounded-lg flex items-center justify-center text-gray-500 text-sm">
+                            Chưa có hình ảnh
+                          </div>
+                        )}
                         <h3 className="font-semibold mt-2">
                           {item.name}
                         </h3>
