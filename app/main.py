@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.agent.graph import app as agent_graph
 from app.agent.message_utils import append_user_message
 from app.agent.response_builder import extract_frontend_data, get_last_ai_text
+from app.utils.frontend import extract_frontend_data
 
 import logging
 import json
@@ -53,8 +54,10 @@ async def chat(request: ChatRequest):
     # 4. Cập nhật lại bộ nhớ session
     sessions_data[sid] = final_state
 
+    reply_text = get_last_ai_text(final_state)
+
     return {
-        "reply": get_last_ai_text(final_state),
+        "reply": reply_text,
         "data": extract_frontend_data(final_state),
     }
 

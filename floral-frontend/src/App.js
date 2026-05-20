@@ -99,7 +99,7 @@ export default function App() {
           >
             {msg.type === "user" ? (
               <div className="flex justify-end">
-                <div className="bg-green-500 text-white px-4 py-2 rounded-2xl max-w-xs">
+                <div className="bg-green-500 text-white px-4 py-2 rounded-2xl max-w-md">
                   {msg.text}
                 </div>
               </div>
@@ -109,7 +109,7 @@ export default function App() {
                 {/* <div className="bg-pink-100 px-4 py-2 rounded-2xl max-w-xs">
                   {msg.text}
                 </div> */}
-                <div className="bg-pink-100 px-4 py-2 rounded-2xl max-w-xs text-sm">
+                <div className="bg-pink-100 px-4 py-2 rounded-2xl max-w-md  text-sm">
                   <ReactMarkdown>{msg.text}</ReactMarkdown>
                 </div>
 

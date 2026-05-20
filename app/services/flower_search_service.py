@@ -113,6 +113,16 @@ def metadata_to_flower_item(meta: dict, query: str, effective_type: str, effecti
     }
 
 
+def process_search_results(state: dict, filtered_results: list[dict], intro: str):
+    """
+    Cập nhật state với kết quả tìm kiếm đã được LLM lọc qua.
+    """
+    # Cập nhật kết quả tìm kiếm đã lọc vào state
+    state["search_results"] = filtered_results
+    state["search_context"] = {"intro": intro}
+
+    return state
+
 def search_flowers_service(
     query: str,
     type_of_flower: str = None,
@@ -159,7 +169,7 @@ def search_flowers_service(
     ]
 
     flower_list.sort(key=lambda x: x["match_score"], reverse=True)
-
+    print(f"[flower_search_service] Found {len(flower_list)} candidates, used_relaxed_search={used_relaxed_search}")
     if flower_list:
         top_score = flower_list[0]["match_score"]
         strong_matches = [
@@ -179,7 +189,7 @@ def search_flowers_service(
         }
         for item in flower_list
     ]
-
+    print(f"[flower_search_service] Returning {len(items_for_frontend)} items for frontend")
     intro = (
         "Không tìm thấy mẫu khớp hoàn toàn. Dưới đây là một số mẫu gần nhất để anh/chị tham khảo:\n"
         if used_relaxed_search and flower_list
@@ -192,6 +202,11 @@ def search_flowers_service(
         f"  Mô tả: {item['description']}\n"
         for item in flower_list
     ]
+    print(f"[flower_search_service] Intro: {intro}")
+    print(f"[flower_search_service] Flower strings: {flower_strings}")
+    # Cập nhật state với kết quả đã lọc
+    state = {}
+    process_search_results(state, items_for_frontend, intro)
 
     return {
         "success": True,
@@ -207,3 +222,4 @@ def search_flowers_service(
             "used_relaxed_search": used_relaxed_search,
         },
     }
+

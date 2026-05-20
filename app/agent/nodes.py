@@ -1,3 +1,4 @@
+from langchain_ollama import ChatOllama
 from langchain_core.messages import AIMessage
 
 from app.agent.message_utils import get_last_user_text, make_tool_message, make_ai_message
@@ -7,13 +8,14 @@ from app.agent.response_builder import (
     build_order_confirmation,
     build_missing_fields_question,
     build_fallback_response,
+    build_search_response_with_selection
 )
 
 from app.extractors.search_intent_extractor import get_query_intent
 from app.extractors.flower_reference_resolver import resolve_flower_reference
 from app.extractors.order_info_extractor import extract_order_info
 
-from app.services.flower_search_service import search_flowers_service
+from app.services.flower_search_service import search_flowers_service, process_search_results
 from app.services.flower_detail_service import get_flower_detail_service
 from app.services.order_service import (
     merge_order_info,
@@ -24,6 +26,8 @@ from app.services.order_service import (
 )
 
 from app.utils.messages import get_last_user_text
+
+llm = ChatOllama(model="qwen3:4b", temperature=0)
 
 def merge_search_context(old_context: dict, new_context: dict) -> dict:
     merged = dict(old_context or {})
@@ -45,17 +49,20 @@ def search_node(state: dict):
         color=intent.get("color"),
         style=intent.get("style"),
     )
-
-    tool_msg = make_tool_message("search_flowers", result)
-    ai_msg = build_search_response(user_text, result)
-
     search_results = result.get("results") or result.get("items") or []
 
+    ai_response, recommended_results = build_search_response_with_selection(
+        llm=llm,
+        user_text=user_text,
+        search_results=search_results,
+    )
+
     return {
-        "messages": [tool_msg, ai_msg],
+        "messages": [ai_response],
         "search_results": search_results,
         "search_context": merge_search_context(state.get("search_context", {}), intent),
         "selected_flower": None,
+        "recommended_results": recommended_results,
         "last_tool": "search_flowers",
     }
 
@@ -111,13 +118,15 @@ def checkout_node(state: dict):
     missing = get_missing_fields(customer)
 
     if missing:
-        labels = get_missing_order_labels(missing)
+        
+        question = build_missing_fields_question(missing, FIELD_LABELS)
         return {
             "messages": [
-                AIMessage(content=f"Đơn hàng còn thiếu thông tin: {', '.join(labels)}.")
+                AIMessage(content=question)
             ],
             "customer_info": customer,
             "pending_missing_fields": missing,
+            "last_tool": "checkout",
         }
 
     result = create_order(customer)
