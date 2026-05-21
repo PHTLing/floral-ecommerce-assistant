@@ -49,9 +49,30 @@ def intent_classifier(state: dict):
     # Tôi muốn print agent state để debug
     print("\n" + "="*30)
     print("🧠 [Agent] Classifying intent ...")
-    print("Agent State:", state)
+    # print("Agent State:", state)
 
     user_text = get_last_user_text(state)
+
+    if state.get("pending_order_confirmation"):
+        return {"current_intent": "checkout"}
+    
+    if state.get("last_delivery_info"):
+        text = (user_text or "").lower()
+        reuse_or_add_keywords = [
+            "lấy thêm",
+            "đặt thêm",
+            "mua thêm",
+            "thêm 1",
+            "thêm một",
+            "giao như trên",
+            "thông tin như trên",
+            "địa chỉ như trên",
+            "giờ như trên",
+            "vẫn giao",
+        ]
+
+        if any(keyword in text for keyword in reuse_or_add_keywords):
+            return {"current_intent": "checkout"}
 
     intent, confidence = rule_route_intent(user_text)
     if confidence >= 0.75:
@@ -61,6 +82,9 @@ def intent_classifier(state: dict):
     return {"current_intent": intent}
 
 def route_by_intent(state: dict):
+    if state.get("pending_order_confirmation"):
+        return "checkout"
+     
     intent = state.get("current_intent", "fallback")
     return intent if intent in INTENTS else "fallback"
 

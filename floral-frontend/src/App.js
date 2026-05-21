@@ -10,6 +10,39 @@ const QUICK_REPLIES = [
   "🎓 Mẫu hoa chúc mừng"
 ];
 
+const STORAGE_KEY = "flora_chat_messages";
+const SESSION_KEY = "flora_chat_session_id";
+
+function getOrCreateSessionId() {
+  let sid = localStorage.getItem(SESSION_KEY);
+
+  if (!sid) {
+    sid = crypto.randomUUID();
+    localStorage.setItem(SESSION_KEY, sid);
+  }
+
+  return sid;
+}
+
+function MarkdownMessage({ text }) {
+  return (
+    <ReactMarkdown
+      components={{
+        a: ({ node, ...props }) => (
+          <a
+            {...props}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline"
+          />
+        ),
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  );
+}
+
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -58,11 +91,29 @@ export default function App() {
         data: res.data.data || [],
       };
 
-      setMessages((prev) => [...prev, botMsg]);
-    } catch (err) {
-      console.error(err);
-    }
+    setMessages((prev) => [...prev, botMsg]);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+  const createGreetingMessage = () => ({
+    type: "bot",
+    text: "Xin chào! 👋 Tôi là FloraConsult - chatbot tư vấn hoa của bạn.\nBạn cần mình giúp gì hôm nay?",
+    isGreeting: true,
+    data: []
+  });
+
+  const clearChat = () => {
+    setMessages([createGreetingMessage()]);
+    setUserHasResponded(false);
+    setInput("");
   };
+
+  useEffect(() => {
+    setMessages([createGreetingMessage()]);
+  }, []);
+
 
   return (
     <div className="h-screen flex flex-col bg-gray-100">
@@ -82,11 +133,19 @@ export default function App() {
             </p>
           </div>
         </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={clearChat}
+            className="bg-gray-100 text-gray-600 px-4 py-2 rounded-full hover:bg-gray-200 transition-colors text-sm"
+          >
+            Xóa lịch sử
+          </button>
 
-        <button className="bg-green-500 text-white px-4 py-2 rounded-full flex items-center gap-2">
-          <Phone size={16} />
-          Gọi ngay
-        </button>
+          <button className="bg-green-500 text-white px-4 py-2 rounded-full flex items-center gap-2">
+            <Phone size={16} />
+            Gọi ngay
+          </button>
+        </div>
       </div>
 
       {/* CHAT */}
@@ -109,9 +168,12 @@ export default function App() {
                 {/* <div className="bg-pink-100 px-4 py-2 rounded-2xl max-w-xs">
                   {msg.text}
                 </div> */}
-                <div className="bg-pink-100 px-4 py-2 rounded-2xl max-w-md  text-sm">
-                  <ReactMarkdown>{msg.text}</ReactMarkdown>
+                <div className="bg-pink-100 px-4 py-3 rounded-2xl max-w-lg text-sm leading-relaxed prose prose-sm ">
+                  <MarkdownMessage text={msg.text} />
                 </div>
+                {/* <div className="bg-pink-100 px-4 py-2 rounded-2xl max-w-md  text-sm">
+                  <ReactMarkdown>{msg.text}</ReactMarkdown>
+                </div> */}
 
                 {/* Quick replies - Chỉ hiển thị nếu user chưa phản hồi và đây là message cuối cùng */}
                 {!userHasResponded && idx === messages.length - 1 && (

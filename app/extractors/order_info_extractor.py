@@ -8,6 +8,8 @@ from app.utils.datetime_vi import (
     parse_time_vietnamese,
 )
 
+from app.utils.order_items import make_item
+
 llm_extract = ChatOllama(model="qwen3:4b", temperature=0)
 
 
@@ -67,20 +69,73 @@ def extract_address(text: str):
     Bắt địa chỉ từ:
     - giao về TP HCM
     - giao tới 123 Nguyễn Huệ
-    - ship về Quận 1
+    - giao đến số 35, Nguyễn Trãi, quận 3, TP HCM vào lúc 4 giờ chiều
+    - ship về Quận 1 ngày mai
     """
     patterns = [
-        r"(?:giao về|giao tới|giao đến|ship về|ship tới|địa chỉ)\s+(.+?)(?=\s+(?:vào|lúc|ngày)\b|,|\.|$)",
+        r"(?:giao về|giao tới|giao đến|giao|ship về|ship tới|ship đến|địa chỉ)\s+(.+?)(?=\s+(?:vào lúc|vào|lúc|ngày|ngày nhận|giờ nhận)\b|$)",
     ]
 
     for pattern in patterns:
         match = re.search(pattern, text or "", re.IGNORECASE)
         if match:
             value = match.group(1).strip()
+
+            # Dọn dấu câu cuối nếu có
+            value = value.strip(" ,.")
+
             if value:
                 return value
 
     return None
+
+GENERIC_PRODUCT_WORDS = {
+    "bó",
+    "giỏ",
+    "hộp",
+    "cái",
+    "mẫu",
+    "hoa",
+    "bông",
+    "1 bó",
+    "1 giỏ",
+    "1 hộp",
+}
+
+
+def is_valid_flower_name(value: str | None) -> bool:
+    if not value:
+        return False
+
+    text = value.strip().lower()
+
+    if not text:
+        return False
+
+    if text in GENERIC_PRODUCT_WORDS:
+        return False
+
+    invalid_starts = [
+        "giao",
+        "ship",
+        "về",
+        "tới",
+        "đến",
+        "vào",
+        "lúc",
+        "ngày",
+        "đường",
+        "địa chỉ",
+    ]
+
+    if any(text.startswith(prefix) for prefix in invalid_starts):
+        return False
+
+    # Nếu chỉ toàn số hoặc chỉ 1 từ quá chung chung thì bỏ
+    if text.isdigit():
+        return False
+
+    return True
 
 def extract_flower_from_state_or_text(text: str, state: dict):
     """
@@ -99,22 +154,42 @@ def extract_flower_from_state_or_text(text: str, state: dict):
             flower_id = item.get("id")
             return f"{name} - {flower_id}" if flower_id else name
 
-    # 2. Regex lấy tên mẫu sau cụm lấy/đặt/mua
-    # Ví dụ: "tôi lấy 1 bó Dreaming, sdt..."
+    # 2. Nếu user nói rõ "mẫu X"
     match = re.search(
-        r"(?:lấy|đặt|mua)\s+\d*\s*(?:bó|giỏ|hộp|cái)?\s*(.+?)(?=,|\.|\s+sđt|\s+sdt|\s+giao|\s+ship|\s+vào|\s+lúc|\s+ngày|$)",
+        r"(?:mẫu|hoa mẫu|sản phẩm)\s+(.+?)(?=,|\.|\s+sđt|\s+sdt|\s+giao|\s+ship|\s+vào|\s+lúc|\s+ngày|$)",
         text or "",
         re.IGNORECASE,
     )
     if match:
         flower_name = match.group(1).strip()
-
-        # Tránh lấy nhầm câu chung chung như "giao về TP HCM"
-        invalid_starts = ["giao", "ship", "về", "tới", "đến", "vào", "lúc", "ngày"]
-        if flower_name and not any(flower_name.lower().startswith(x) for x in invalid_starts):
+        if is_valid_flower_name(flower_name):
             return flower_name
 
-    # 3. Fallback selected_flower cuối cùng
+    # 3. Nếu user nói "lấy 1 bó Dreaming" hoặc "đặt thêm 1 bó Just for you"
+    match = re.search(
+        r"(?:lấy thêm|đặt thêm|mua thêm|lấy|đặt|mua)\s+"
+        r"(?:\d+\s*)?"
+        r"(?:bó|giỏ|hộp|cái)?\s+"
+        r"(.+?)(?=,|\.|\s+sđt|\s+sdt|\s+giao|\s+ship|\s+vào|\s+lúc|\s+ngày|$)",
+        text or "",
+        re.IGNORECASE,
+    )
+    if match:
+        flower_name = match.group(1).strip()
+        if is_valid_flower_name(flower_name):
+            return flower_name
+
+    # 4. Nếu câu hiện tại không có tên mẫu mới,
+    # ưu tiên giữ mẫu đang nằm trong customer_info/order_draft
+    current_order = state.get("customer_info") or {}
+    if current_order.get("loai_hang"):
+        return current_order.get("loai_hang")
+
+    order_draft = state.get("order_draft") or {}
+    if order_draft.get("loai_hang"):
+        return order_draft.get("loai_hang")
+    
+    # 5. Fallback selected_flower cuối cùng
     selected = state.get("selected_flower") or {}
     if selected.get("name"):
         flower_id = selected.get("id")
@@ -190,10 +265,51 @@ def clean_llm_data(data: dict):
 
     return cleaned
 
+def is_add_more_request(text: str) -> bool:
+    text = (text or "").lower()
+
+    keywords = [
+        "lấy thêm",
+        "đặt thêm",
+        "mua thêm",
+        "thêm 1",
+        "thêm một",
+        "cho thêm",
+        "muốn lấy thêm",
+        "muốn đặt thêm",
+    ]
+
+    return any(keyword in text for keyword in keywords)
+
+
+def is_reuse_previous_delivery_request(text: str) -> bool:
+    text = (text or "").lower()
+
+    keywords = [
+        "như trên",
+        "thông tin như trên",
+        "giao như trên",
+        "địa chỉ như trên",
+        "giờ như trên",
+        "ngày giờ như trên",
+        "thời gian như trên",
+        "vẫn giao",
+        "vẫn địa chỉ",
+        "giao đến thông tin như trên",
+        "như trước đó",
+        "đã cung cấp trước đó",
+        "đã nói trước đó",
+        "giữ nguyên thông tin giao hàng trước đó",
+        "giữ nguyên địa chỉ giao hàng trước đó",
+        "giữ nguyên thời gian giao hàng trước đó",
+        "giữ nguyên ngày giờ giao hàng trước đó",
+    ]
+
+    return any(keyword in text for keyword in keywords)
 
 def extract_order_info(user_text: str, state: dict) -> dict:
     extracted = {}
-
+    
     name = extract_customer_name(user_text)
     if name:
         extracted["ten_khach"] = name
@@ -203,26 +319,45 @@ def extract_order_info(user_text: str, state: dict) -> dict:
         extracted["sdt"] = phone
 
     quantity = extract_quantity(user_text)
-    if quantity:
-        extracted["so_luong"] = quantity
 
     address = extract_address(user_text)
     if address:
         extracted["dia_chi"] = address
 
     flower = extract_flower_from_state_or_text(user_text, state)
-    if flower:
-        extracted["loai_hang"] = flower
 
     extracted.update(extract_date_time(user_text))
 
-    # LLM chỉ bổ sung field còn thiếu, không overwrite field regex đã bắt được
     llm_data = clean_llm_data(extract_with_llm(user_text))
     for key, value in llm_data.items():
+        if key == "loai_hang" and not is_valid_flower_name(str(value)):
+            continue
+
         if key not in extracted:
             extracted[key] = value
 
+    if is_reuse_previous_delivery_request(user_text) or is_add_more_request(user_text):
+        last_delivery = state.get("last_delivery_info") or {}
+
+        for field in ["ten_khach", "sdt", "dia_chi", "ngay_nhan", "gio_nhan"]:
+            if not extracted.get(field) and last_delivery.get(field):
+                extracted[field] = last_delivery[field]
+
+    # Ưu tiên flower đã resolve bằng rule/state/text
     if flower:
-        extracted["loai_hang"] = flower
+        loai_hang = flower
+    else:
+        loai_hang = extracted.get("loai_hang")
+
+    so_luong = quantity or extracted.get("so_luong")
+
+    item = make_item(loai_hang, so_luong)
+
+    if item:
+        extracted["items"] = [item]
+
+    # Từ giờ không trả loai_hang/so_luong top-level nữa
+    extracted.pop("loai_hang", None)
+    extracted.pop("so_luong", None)
 
     return extracted

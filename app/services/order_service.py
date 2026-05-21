@@ -4,6 +4,7 @@ from datetime import datetime
 
 from app.repositories.order_repository import save_order
 from app.utils.datetime_vi import normalize_order_date, parse_time_vietnamese, extract_date_and_time_combined
+from app.utils.order_items import ensure_order_items, is_valid_item
 
 # - Định nghĩa field bắt buộc của đơn hàng
 # - Gộp thông tin đơn hàng cũ + thông tin mới
@@ -19,8 +20,7 @@ REQUIRED_ORDER_FIELDS = [
     "ten_khach",
     "sdt",
     "dia_chi",
-    "loai_hang",
-    "so_luong",
+    "items",
     "ngay_nhan",
     "gio_nhan",
 ]
@@ -29,8 +29,7 @@ FIELD_LABELS = {
     "ten_khach": "Tên khách hàng",
     "sdt": "Số điện thoại",
     "dia_chi": "Địa chỉ giao hàng",
-    "loai_hang": "Tên mẫu hoa",
-    "so_luong": "Số lượng",
+    "items": "Mẫu hoa và số lượng",
     "ngay_nhan": "Ngày nhận",
     "gio_nhan": "Giờ nhận",
 }
@@ -38,18 +37,95 @@ FIELD_LABELS = {
 
 def merge_order_info(old: dict, new: dict):
     merged = dict(old or {})
+    invalid_product_values = {
+        "bó",
+        "giỏ",
+        "hộp",
+        "cái",
+        "mẫu",
+        "hoa",
+        "1 bó",
+        "1 giỏ",
+        "1 hộp",
+    }
+
     for key, value in (new or {}).items():
-        if value not in [None, "", []]:
-            merged[key] = value
+        if value in [None, "", []]:
+            continue
+
+        # Ưu tiên format mới items[]
+        if key == "items":
+            new_items = [
+                item
+                for item in (value or [])
+                if is_valid_item(item)
+            ]
+
+            if not new_items:
+                continue
+
+            # Với merge thông thường: replace items bằng items mới.
+            # Với "lấy thêm", không dùng hàm này để append;
+            # hãy dùng append_item_to_order() trong checkout_node.
+            merged["items"] = new_items
+
+            # Đã dùng items[] thì bỏ field cũ để tránh lẫn format.
+            merged.pop("loai_hang", None)
+            merged.pop("so_luong", None)
+            continue
+
+        # Tương thích với extractor/code cũ nếu còn trả loai_hang
+        if key == "loai_hang":
+            text = str(value).strip().lower()
+
+            if text in invalid_product_values:
+                continue
+
+            # Nếu order đã dùng items[] thì không cho ghi đè ngược về loai_hang top-level.
+            if merged.get("items"):
+                continue
+
+        # Tương thích code cũ: nếu đã có items[] thì không set so_luong top-level.
+        if key == "so_luong":
+            if merged.get("items"):
+                continue
+
+        merged[key] = value
+
+    # Nếu sau merge vẫn còn legacy loai_hang/so_luong thì convert sang items[]
+    # để thống nhất format order.
+    if merged.get("loai_hang") or merged.get("so_luong"):
+        items = ensure_order_items(merged)
+
+        if items:
+            merged["items"] = items
+
+        merged.pop("loai_hang", None)
+        merged.pop("so_luong", None)
+
     return merged
 
-
 def get_missing_fields(order_info: dict):
-    return [
+    base_required = [
+        "ten_khach",
+        "sdt",
+        "dia_chi",
+        "ngay_nhan",
+        "gio_nhan",
+    ]
+
+    missing = [
         field
-        for field in REQUIRED_ORDER_FIELDS
+        for field in base_required
         if not order_info.get(field)
     ]
+
+    items = ensure_order_items(order_info)
+
+    if not items:
+        missing.append("items")
+
+    return list(dict.fromkeys(missing))
 
 def get_missing_order_labels(missing_fields: list[str]) -> list[str]:
     """
@@ -93,6 +169,10 @@ def validate_and_normalize_order(order_info: dict):
     normalized = dict(order_info or {})
     errors: dict[str, str] = {}
 
+    normalized["items"] = ensure_order_items(normalized)
+    normalized.pop("loai_hang", None)
+    normalized.pop("so_luong", None)
+
     missing_fields = get_missing_fields(normalized)
     if missing_fields:
         return normalized, missing_fields, errors
@@ -105,11 +185,19 @@ def validate_and_normalize_order(order_info: dict):
         normalized["sdt"] = phone
 
     # 2. Số lượng
-    quantity, quantity_error = normalize_quantity(normalized.get("so_luong"))
-    if quantity_error:
-        errors["so_luong"] = quantity_error
-    else:
-        normalized["so_luong"] = quantity
+    normalized_items = []
+    for idx, item in enumerate(normalized.get("items") or []):
+        item = dict(item)
+
+        quantity, quantity_error = normalize_quantity(item.get("so_luong"))
+        if quantity_error:
+            errors[f"items[{idx}].so_luong"] = quantity_error
+        else:
+            item["so_luong"] = quantity
+
+        normalized_items.append(item)
+
+    normalized["items"] = normalized_items
 
     # 3. Ngày nhận
     normalized_date, date_error = normalize_order_date(normalized.get("ngay_nhan"))
@@ -128,7 +216,7 @@ def validate_and_normalize_order(order_info: dict):
         errors["gio_nhan"] = time_error
     else:
         normalized["gio_nhan"] = normalized_time
-
+    
     return normalized, [], errors
 
 

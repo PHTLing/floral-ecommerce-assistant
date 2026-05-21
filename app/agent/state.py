@@ -3,13 +3,19 @@ from typing import TypedDict, List
 
 class AgentState(TypedDict, total=False):
     messages:  List[dict]
-    current_intent: str      
+    current_intent: str    
+
     selected_flower: dict     
     search_results: list
     search_context: dict  
     recommended_results: list  
+
+    order_draft: dict
+    pending_order_confirmation: bool
+
     customer_info: dict     
     pending_missing_fields: list  
+
     last_tool: str     
     tool_retry_count: int
 
@@ -20,6 +26,8 @@ def create_initial_state() -> AgentState:
         "selected_flower": None,
         "search_results": [],
         "search_context": {},
+        "order_draft": {},
+        "pending_order_confirmation": False,    
         "recommended_results": [],
         "customer_info": {},
         "pending_missing_fields": [],

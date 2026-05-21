@@ -1,13 +1,15 @@
 import json, re
 from langchain_ollama import ChatOllama
 from langchain_core.messages import AIMessage
-
+from textwrap import dedent
 from app.agent.message_utils import get_message_content
 from app.agent.prompts import (
     SEARCH_RESPONSE_PROMPT,
     DETAIL_RESPONSE_PROMPT,
     ORDER_CONFIRMATION_PROMPT,
 )
+
+from app.utils.order_items import ensure_order_items
 
 llm_response = ChatOllama(model="qwen3:8b", temperature=0)
 
@@ -137,6 +139,12 @@ def build_missing_fields_question(missing_fields: list[str], field_labels: dict)
     if not labels:
         return "Mình đã có đủ thông tin để lên đơn cho anh/chị rồi ạ 🌷"
 
+    if len(labels) == 1:
+        return (
+            f"Mình gần đủ thông tin để lên đơn rồi ạ. "
+            f"Anh/chị cho mình xin thêm **{labels[0]}** nhé 🌷"
+        )
+
     if len(missing_fields) >= 5:
         return (
             "Mình đã ghi nhận mẫu hoa anh/chị muốn đặt rồi ạ 🌷\n\n"
@@ -146,18 +154,44 @@ def build_missing_fields_question(missing_fields: list[str], field_labels: dict)
             "Anh/chị có thể gửi tất cả trong một tin nhắn cũng được ạ."
         )
 
-    if len(labels) == 1:
-        return (
-            f"Mình gần đủ thông tin để lên đơn rồi ạ. "
-            f"Anh/chị cho mình xin thêm **{labels[0]}** nhé 🌷"
-        )
-
     return (
         "Mình gần đủ thông tin để hoàn tất đơn hàng rồi ạ 🌷\n"
         "Anh/chị cho mình xin thêm: "
         + ", ".join(f"**{label}**" for label in labels)
         + "."
     )
+
+def build_order_review_message(order: dict) -> str:
+    items = order.get("items") or []
+
+    if items:
+        item_lines = "\n".join(
+            f"- **{item.get('loai_hang', 'Mẫu hoa')}**: {item.get('so_luong', '1')} bó"
+            for item in items
+        )
+    else:
+        item_lines = (
+            f"- **{order.get('loai_hang', 'Chưa có')}**: "
+            f"{order.get('so_luong', 'Chưa có')} bó"
+        )
+
+    return "\n".join([
+        "Em đã ghi nhận thông tin đặt hoa như sau, anh/chị kiểm tra thông tin đơn hàng nhé 🌷",
+        "",
+        "**Sản phẩm**",
+        item_lines,
+        "",
+        "**Thông tin giao hàng**",
+        f"- **Tên khách hàng:** {order.get('ten_khach', 'Chưa có')}",
+        f"- **Số điện thoại:** {order.get('sdt', 'Chưa có')}",
+        f"- **Địa chỉ giao hàng:** {order.get('dia_chi', 'Chưa có')}",
+        f"- **Ngày nhận:** {order.get('ngay_nhan', 'Chưa có')}",
+        f"- **Giờ nhận:** {order.get('gio_nhan', 'Chưa có')}",
+        "",
+        'Nếu thông tin đã đúng, anh/chị nhắn **"xác nhận"** hoặc **"đúng rồi"** giúp mình ạ.',
+        'Nếu cần sửa, anh/chị cứ nhắn phần cần đổi, ví dụ: **"sửa địa chỉ thành ..."**, **"đổi giờ nhận thành ..."**.',
+    ]).strip()
+
 
 def build_fallback_response(user_text: str) -> str:
     t = (user_text or "").lower()
