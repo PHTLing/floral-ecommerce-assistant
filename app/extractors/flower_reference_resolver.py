@@ -11,13 +11,96 @@ from langchain_ollama import ChatOllama
 
 llm_extract = ChatOllama(model="qwen3:4b", temperature=0)
 
+def is_reference_to_current_product(text: str) -> bool:
+    text = (text or "").lower()
+
+    reference_keywords = [
+        "mẫu này",
+        "mẫu đó",
+        "cái này",
+        "cái đó",
+        "sản phẩm này",
+        "sản phẩm đó",
+        "hoa này",
+        "hoa đó",
+        "này gồm",
+        "đó gồm",
+        "mẫu này gồm",
+        "mẫu này có",
+        "mẫu đó có",
+        "bó này",
+        "bó đó",
+        "mẫu vừa rồi",
+        "mẫu vừa gợi ý",
+        "mẫu bên trên",
+        "sản phẩm bên trên",
+        "mẫu đầu tiên",
+        "mẫu đầu",
+    ]
+
+    return any(k in text for k in reference_keywords)
 
 def extract_ordinal_reference(text: str):
-    match = re.search(r"mẫu\s*(?:thứ\s*)?(\d{1,2})", (text or "").lower())
-    if not match:
-        return None
-    return int(match.group(1))
+    text = (text or "").lower().strip()
 
+    ordinal_patterns = [
+        (1, [
+            "mẫu đầu tiên",
+            "mẫu đầu",
+            "cái đầu tiên",
+            "cái đầu",
+            "sản phẩm đầu tiên",
+            "sản phẩm đầu",
+            "hoa đầu tiên",
+            "hoa đầu",
+        ]),
+        (2, [
+            "mẫu thứ hai",
+            "mẫu thứ 2",
+            "mẫu 2",
+            "cái thứ hai",
+            "cái thứ 2",
+            "sản phẩm thứ hai",
+            "sản phẩm thứ 2",
+            "hoa thứ hai",
+            "hoa thứ 2",
+        ]),
+        (3, [
+            "mẫu thứ ba",
+            "mẫu thứ 3",
+            "mẫu 3",
+            "cái thứ ba",
+            "cái thứ 3",
+            "sản phẩm thứ ba",
+            "sản phẩm thứ 3",
+            "hoa thứ ba",
+            "hoa thứ 3",
+        ]),
+    ]
+
+    for index, keywords in ordinal_patterns:
+        if any(keyword in text for keyword in keywords):
+            return index
+
+    # Bắt dạng tổng quát: mẫu thứ 4, mẫu 5, cái thứ 2, sản phẩm thứ 3
+    match = re.search(
+        r"(?:mẫu|cái|sản phẩm|hoa)\s*(?:thứ\s*)?(\d{1,2})",
+        text,
+        re.IGNORECASE,
+    )
+
+    if match:
+        return int(match.group(1))
+
+    return None
+
+def get_visible_flower_results(state: dict) -> list:
+    return (
+        state.get("recommended_results")
+        or state.get("last_recommended_flowers")
+        or state.get("search_results")
+        or []
+    )
 
 def extract_id_reference(text: str):
     match = re.search(r"\b(?:id|mã|mã số|mã nội bộ)\s*[:\-]?\s*(\d{3,7})\b", text or "", re.IGNORECASE)
@@ -127,6 +210,7 @@ Chỉ trả về JSON.
 
 
 def resolve_flower_reference(user_text: str, state: dict) -> dict:
+    visible_results = get_visible_flower_results(state)
     search_results = state.get("search_results") or []
 
     ordinal = extract_ordinal_reference(user_text)
@@ -149,7 +233,7 @@ def resolve_flower_reference(user_text: str, state: dict) -> dict:
             "confidence": 0.75,
         }
 
-    if any(k in (user_text or "").lower() for k in ["mẫu này", "cái này", "bó này"]):
+    if is_reference_to_current_product(user_text):
         resolved = resolve_by_selected_flower(state)
         if resolved:
             return resolved

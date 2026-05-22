@@ -9,12 +9,16 @@ class AgentState(TypedDict, total=False):
     search_results: list
     search_context: dict  
     recommended_results: list  
+    last_referenced_flower: dict
 
     order_draft: dict
     pending_order_confirmation: bool
 
     customer_info: dict     
     pending_missing_fields: list  
+
+    handoff_requested: bool
+    handoff_reason: str
 
     last_tool: str     
     tool_retry_count: int
@@ -29,8 +33,11 @@ def create_initial_state() -> AgentState:
         "order_draft": {},
         "pending_order_confirmation": False,    
         "recommended_results": [],
+        "last_referenced_flower": None,
         "customer_info": {},
         "pending_missing_fields": [],
+        "handoff_requested": False,
+        "handoff_reason": "",
         "last_tool": "",
         "tool_retry_count": 0,
     }

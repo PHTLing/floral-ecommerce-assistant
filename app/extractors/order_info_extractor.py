@@ -100,6 +100,23 @@ GENERIC_PRODUCT_WORDS = {
     "1 bó",
     "1 giỏ",
     "1 hộp",
+    "bó",
+    "giỏ",
+    "hộp",
+    "cái",
+    "mẫu",
+    "hoa",
+    "bông",
+    "này",
+    "đó",
+    "này.",
+    "đó.",
+    "mẫu này",
+    "mẫu đó",
+    "cái này",
+    "cái đó",
+    "hoa này",
+    "hoa đó",
 }
 
 
@@ -137,6 +154,30 @@ def is_valid_flower_name(value: str | None) -> bool:
 
     return True
 
+def is_current_product_order_request(text: str) -> bool:
+    text = (text or "").lower()
+
+    keywords = [
+        "lấy mẫu này",
+        "lấy mẫu đó",
+        "đặt mẫu này",
+        "đặt mẫu đó",
+        "mua mẫu này",
+        "mua mẫu đó",
+        "tôi lấy mẫu này",
+        "tôi muốn lấy mẫu này",
+        "tôi muốn đặt mẫu này",
+        "tôi muốn mua mẫu này",
+        "lấy cái này",
+        "đặt cái này",
+        "mua cái này",
+        "lấy hoa này",
+        "đặt hoa này",
+        "mua hoa này",
+    ]
+
+    return any(keyword in text for keyword in keywords)
+
 def extract_flower_from_state_or_text(text: str, state: dict):
     """
     Ưu tiên đúng:
@@ -145,6 +186,17 @@ def extract_flower_from_state_or_text(text: str, state: dict):
     3. Cuối cùng mới fallback selected_flower.
     """
     t = (text or "").lower()
+
+    if is_current_product_order_request(t):
+        flower = (
+            state.get("selected_flower")
+            or state.get("last_referenced_flower")
+            or {}
+        )
+
+        if flower.get("name"):
+            flower_id = flower.get("id")
+            return f"{flower.get('name')} - {flower_id}" if flower_id else flower.get("name")
 
     # 1. Ưu tiên tên mẫu xuất hiện trực tiếp trong câu user
     search_results = state.get("search_results") or []

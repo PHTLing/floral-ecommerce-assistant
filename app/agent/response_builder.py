@@ -192,18 +192,106 @@ def build_order_review_message(order: dict) -> str:
         'Nếu cần sửa, anh/chị cứ nhắn phần cần đổi, ví dụ: **"sửa địa chỉ thành ..."**, **"đổi giờ nhận thành ..."**.',
     ]).strip()
 
+def build_smalltalk_response(user_text: str) -> str:
+    text = (user_text or "").lower().strip()
+
+    # Chào hỏi
+    if any(k in text for k in ["xin chào", "chào", "hello", "hi", "alo"]):
+        return (
+            "Dạ em chào anh/chị 🌷\n"
+            "Em là chatbot hỗ trợ của FloraConsult. "
+            "Em có thể giúp anh/chị tìm mẫu hoa, xem chi tiết sản phẩm và hỗ trợ đặt hoa ạ."
+        )
+
+    # Bot là ai
+    if any(k in text for k in ["bạn là ai", "em là ai", "bot là ai", "chatbot là gì"]):
+        return (
+            "Dạ em là chatbot tư vấn của shop hoa FloraConsult 🌷\n"
+            "Em có thể hỗ trợ anh/chị tìm hoa theo dịp, màu sắc, ngân sách, "
+            "xem thông tin mẫu hoa và ghi nhận thông tin đặt hàng ạ."
+        )
+
+    # Shop bán gì
+    if any(k in text for k in ["shop bán gì", "có những loại hoa nào", "bên mình có hoa gì"]):
+        return (
+            "Dạ shop có nhiều mẫu hoa tươi như hoa sinh nhật, hoa chúc mừng, hoa khai trương, "
+            "hoa tình yêu, hoa chia buồn và các mẫu bó/giỏ/hộp hoa ạ 🌷\n"
+            "Anh/chị có thể nói dịp tặng, màu yêu thích hoặc ngân sách để em gợi ý mẫu phù hợp."
+        )
+
+    # Thời gian giao hàng
+    if any(k in text for k in ["giao hàng", "giao hoa", "mấy giờ giao", "thời gian giao", "bao lâu giao"]):
+        return (
+            "Dạ shop có hỗ trợ giao hoa trong ngày tùy khu vực và tình trạng mẫu hoa ạ 🌷\n"
+            "Khi đặt hàng, anh/chị cho em xin địa chỉ, ngày nhận và giờ nhận mong muốn, "
+            "em sẽ ghi nhận thông tin để shop kiểm tra và xử lý đơn."
+        )
+
+    # Phí ship
+    if any(k in text for k in ["phí ship", "tiền ship", "phí giao", "ship bao nhiêu"]):
+        return (
+            "Dạ phí giao hàng có thể thay đổi theo khu vực và thời điểm giao ạ.\n"
+            "Anh/chị cho em xin địa chỉ giao hàng, shop sẽ kiểm tra phí giao cụ thể cho mình."
+        )
+
+    # Thanh toán
+    if any(k in text for k in ["thanh toán", "chuyển khoản", "cod", "trả tiền", "tiền mặt"]):
+        return (
+            "Dạ shop có thể hỗ trợ các hình thức thanh toán phổ biến như chuyển khoản "
+            "hoặc thanh toán theo hướng dẫn của shop ạ.\n"
+            "Sau khi anh/chị xác nhận đơn, nhân viên có thể hỗ trợ thêm thông tin thanh toán chi tiết."
+        )
+
+    # Cách đặt hàng
+    if any(k in text for k in ["đặt hàng như thế nào", "cách đặt", "muốn đặt hoa", "đặt hoa sao"]):
+        return (
+            "Dạ để đặt hoa, anh/chị chỉ cần cho em các thông tin sau ạ:\n"
+            "- Mẫu hoa muốn đặt\n"
+            "- Số lượng\n"
+            "- Tên người nhận\n"
+            "- Số điện thoại\n"
+            "- Địa chỉ giao hàng\n"
+            "- Ngày và giờ nhận hoa\n\n"
+            "Em sẽ hỗ trợ lên đơn hàng ạ 🌷"
+        )
+
+    # Cảm ơn
+    if any(k in text for k in ["cảm ơn", "thanks", "thank you", "ok cảm ơn"]):
+        return (
+            "Dạ em cảm ơn anh/chị ạ 🌷\n"
+            "Khi nào cần tìm mẫu hoa hoặc đặt hoa, anh/chị cứ nhắn em nhé."
+        )
+
+    # Mặc định smalltalk
+    return (
+        "Dạ em có thể hỗ trợ anh/chị tìm mẫu hoa, xem chi tiết sản phẩm hoặc đặt hoa ạ 🌷\n"
+        "Anh/chị muốn tìm hoa cho dịp nào hoặc cần em hỗ trợ gì thêm không ạ?"
+    )
 
 def build_fallback_response(user_text: str) -> str:
-    t = (user_text or "").lower()
+    text = (user_text or "").lower()
 
-    if "giá" in t:
-        return "Anh/chị muốn tìm hoa trong khoảng giá bao nhiêu ạ?"
-    if "đặt" in t:
-        return "Anh/chị muốn đặt mẫu hoa nào ạ?"
+    if any(k in text for k in ["nhân viên", "người thật", "tư vấn viên"]):
+        return (
+            "Dạ em đã ghi nhận yêu cầu gặp nhân viên hỗ trợ ạ 🌷\n"
+            "Hiện tại em chưa thể kết nối trực tiếp trong khung chat này, "
+            "anh/chị vui lòng để lại số điện thoại hoặc nội dung cần hỗ trợ, "
+            "shop sẽ liên hệ lại sớm nhất có thể."
+        )
 
+    if any(k in text for k in ["khiếu nại", "hoàn tiền", "giao sai", "hoa héo", "hoa hư", "chưa nhận được"]):
+        return (
+            "Dạ em rất tiếc vì trải nghiệm chưa tốt của anh/chị ạ 🌷\n"
+            "Vấn đề này cần nhân viên shop kiểm tra trực tiếp. "
+            "Anh/chị vui lòng để lại mã đơn hàng hoặc số điện thoại đặt hàng, "
+            "shop sẽ hỗ trợ kiểm tra và phản hồi sớm nhất có thể."
+        )
     return (
-        "Em chưa hiểu rõ ý anh/chị 🌷 "
-        "Anh/chị đang muốn tìm hoa, xem chi tiết mẫu hoa, hay đặt hàng ạ?"
+        "Dạ nội dung này có thể cần nhân viên shop hỗ trợ trực tiếp để xử lý chính xác hơn ạ 🌷\n\n"
+        "Anh/chị vui lòng để lại yêu cầu cụ thể hoặc số điện thoại liên hệ, "
+        "shop sẽ kiểm tra và phản hồi lại mình sớm nhất có thể.\n\n"
+        "Trong lúc chờ, em vẫn có thể hỗ trợ anh/chị tìm mẫu hoa, xem chi tiết sản phẩm "
+        "hoặc ghi nhận thông tin đặt hàng ạ."
     )
 
 

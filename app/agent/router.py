@@ -18,7 +18,11 @@ def rule_route_intent(text: str) -> tuple[str, float]:
     checkout_keywords = ["đặt", "mua", "giao", "ship", "thanh toán", "chốt", "lấy mẫu"]
     detail_keywords = ["chi tiết", "gồm", "thành phần", "mẫu này", "giá bao nhiêu", "mô tả"]
     search_keywords = ["tìm", "kiếm", "có hoa", "giá", "dưới", "trên", "khoảng", "màu"]
-    smalltalk_keywords = ["chào", "hello", "hi", "cảm ơn", "thanks"]
+    smalltalk_keywords = ["xin chào", "chào", "hello", "hi", "alo", "bạn là ai", "em là ai", "bot là ai", "cảm ơn", "thanks", "thank you"]
+    fallback_keywords = ["khiếu nại", "hoàn tiền", "bị lỗi", "giao sai", "hoa hư", "hoa héo", "không nhận được hàng", "muốn gặp nhân viên", "nói chuyện với người thật", "gặp tư vấn viên"]
+
+    if any(k in text for k in fallback_keywords):
+        return "fallback", 0.75
 
     if any(k in t for k in checkout_keywords):
         return "checkout", 0.9
@@ -74,11 +78,12 @@ def intent_classifier(state: dict):
         if any(keyword in text for keyword in reuse_or_add_keywords):
             return {"current_intent": "checkout"}
 
-    intent, confidence = rule_route_intent(user_text)
-    if confidence >= 0.75:
-        return {"current_intent": intent}
+    # intent, confidence = rule_route_intent(user_text)
+    # if confidence >= 0.75:
+    #     return {"current_intent": intent}
 
     intent = classify_intent_with_llm(user_text, state)
+    print(f"LLM classified intent: {intent}")
     return {"current_intent": intent}
 
 def route_by_intent(state: dict):

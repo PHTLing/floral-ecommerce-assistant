@@ -10,10 +10,14 @@ from app.agent.response_builder import (
     build_fallback_response,
     build_search_response_with_selection,
     build_order_review_message,
+    build_smalltalk_response
 )
 
 from app.extractors.search_intent_extractor import get_query_intent
-from app.extractors.flower_reference_resolver import resolve_flower_reference
+from app.extractors.flower_reference_resolver import (
+    resolve_flower_reference, 
+    is_reference_to_current_product,
+)
 from app.extractors.order_info_extractor import (
     extract_order_info,
     is_add_more_request,
@@ -63,6 +67,7 @@ def search_node(state: dict):
         color=intent.get("color"),
         style=intent.get("style"),
     )
+
     search_results = result.get("results") or result.get("items") or []
 
     ai_response, recommended_results = build_search_response_with_selection(
@@ -71,18 +76,80 @@ def search_node(state: dict):
         search_results=search_results,
     )
 
-    return {
+    updates = {
         "messages": [ai_response],
         "search_results": search_results,
-        "search_context": merge_search_context(state.get("search_context", {}), intent),
-        "selected_flower": None,
+        "search_context": merge_search_context(
+            state.get("search_context", {}),
+            intent,
+        ),
         "recommended_results": recommended_results,
+        "last_recommended_flowers": recommended_results,
         "last_tool": "search_flowers",
     }
+
+    # Nếu bot thực sự chỉ recommend 1 mẫu cho khách,
+    # thì xem đó là mẫu đang được nhắc tới.
+    if len(recommended_results) == 1:
+        updates["selected_flower"] = recommended_results[0]
+        updates["last_referenced_flower"] = recommended_results[0]
+
+    # Nếu DB chỉ trả đúng 1 mẫu thì cũng set context.
+    elif len(search_results) == 1:
+        updates["selected_flower"] = search_results[0]
+        updates["last_referenced_flower"] = search_results[0]
+
+    # Nếu có nhiều mẫu, không chọn cứng mẫu nào.
+    # Nhưng cũng không nên reset selected_flower về None nếu chưa cần.
+    else:
+        updates["selected_flower"] = state.get("selected_flower")
+        updates["last_referenced_flower"] = state.get("last_referenced_flower")
+
+    return updates
 
 
 def detail_node(state: dict):
     user_text = get_last_user_text(state)
+
+    if is_reference_to_current_product(user_text):
+        flower = (
+            state.get("selected_flower")
+            or state.get("last_referenced_flower")
+        )
+
+        if flower:
+            flower_name = flower.get("name")
+            flower_id = flower.get("id")
+
+            result = get_flower_detail_service(
+                flower_name=flower_name,
+                flower_id=flower_id,
+            )
+
+            tool_msg = make_tool_message("get_flower_details", result)
+            ai_msg = build_detail_response(flower_name, flower_id, result)
+
+            selected_flower = None
+
+            if result.get("success") and result.get("detail"):
+                d = result["detail"]
+                selected_flower = {
+                    "id": d.get("id"),
+                    "name": d.get("name"),
+                    "price": d.get("price"),
+                    "price_display": f"{d.get('price', 0):,} VNĐ",
+                    "image": d.get("image"),
+                    "url": d.get("url"),
+                    "description": d.get("description"),
+                    "components": d.get("components"),
+                }
+
+            return {
+                "messages": [tool_msg, ai_msg],
+                "selected_flower": selected_flower or flower,
+                "last_referenced_flower": selected_flower or flower,
+                "last_tool": "get_flower_details",
+            }
 
     resolved = resolve_flower_reference(user_text, state)
     flower_name = resolved.get("flower_name")
@@ -113,6 +180,7 @@ def detail_node(state: dict):
     return {
         "messages": [tool_msg, ai_msg],
         "selected_flower": selected_flower,
+        "last_referenced_flower": selected_flower,
         "last_tool": "get_flower_details",
     }
 
@@ -430,15 +498,19 @@ def checkout_node(state: dict):
 
 def smalltalk_node(state: dict):
     user_text = get_last_user_text(state)
+
     return {
-        "messages": [make_ai_message("Dạ em chào anh/chị 🌷 Em có thể giúp mình tìm hoa, xem chi tiết mẫu hoa hoặc đặt hàng ạ.")],
+        "messages": [make_ai_message(build_smalltalk_response(user_text))],
         "last_tool": "smalltalk",
     }
 
 
 def fallback_node(state: dict):
     user_text = get_last_user_text(state)
+
     return {
         "messages": [make_ai_message(build_fallback_response(user_text))],
         "last_tool": "fallback",
+        "handoff_requested": True,
+        "handoff_reason": user_text,
     }
