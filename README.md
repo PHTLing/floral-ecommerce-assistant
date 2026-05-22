@@ -130,7 +130,7 @@ npm start
 ---
 
 ## ✨ Demo
-[📄 Xem tài liệu PDF](./docs/Demo.pdf)
+[📄 File demo ](./docs/Demo.pdf)
 ---
 
 ## 🎯 Project Highlights
