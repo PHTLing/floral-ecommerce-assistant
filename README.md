@@ -129,7 +129,11 @@ npm start
 
 ---
 
-## 🎯 Project Highlights for CV
+## ✨ Demo
+[📄 Xem tài liệu PDF](./docs/Demo.pdf)
+---
+
+## 🎯 Project Highlights
 
 - Built a **LangGraph-based Hybrid Agentic RAG assistant** for e-commerce flower consultation and transaction-oriented flows.
 - Designed a **stateful intent routing workflow** across search, product detail, checkout, smalltalk, and fallback nodes.
