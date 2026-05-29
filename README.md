@@ -116,7 +116,7 @@ cd Floral_chatbot
 python -m venv env
 source env/Scripts/activate   # Windows: env\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload #You must have data folder (but so sorry this is sceret)
+uvicorn app.main:app --reload #You must have data folder
 ```
 
 ### Frontend
